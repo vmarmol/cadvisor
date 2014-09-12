@@ -22,10 +22,10 @@ import (
 
 func TestStatsStartTime(t *testing.T) {
 	N := 10
-	stats := make([]*ContainerStats, 0, N)
+	stats := make([]ContainerStats, 0, N)
 	ct := time.Now()
 	for i := 0; i < N; i++ {
-		s := &ContainerStats{
+		s := ContainerStats{
 			Timestamp: ct.Add(time.Duration(i) * time.Second),
 		}
 		stats = append(stats, s)
@@ -46,10 +46,10 @@ func TestStatsStartTime(t *testing.T) {
 
 func TestStatsEndTime(t *testing.T) {
 	N := 10
-	stats := make([]*ContainerStats, 0, N)
+	stats := make([]ContainerStats, 0, N)
 	ct := time.Now()
 	for i := 0; i < N; i++ {
-		s := &ContainerStats{
+		s := ContainerStats{
 			Timestamp: ct.Add(time.Duration(i) * time.Second),
 		}
 		stats = append(stats, s)
@@ -70,8 +70,8 @@ func TestStatsEndTime(t *testing.T) {
 
 func createStats(cpuUsage, memUsage uint64, timestamp time.Time) *ContainerStats {
 	stats := &ContainerStats{
-		Cpu:    &CpuStats{},
-		Memory: &MemoryStats{},
+		Cpu:    CpuStats{},
+		Memory: MemoryStats{},
 	}
 	stats.Cpu.Usage.PerCpu = []uint64{cpuUsage}
 	stats.Cpu.Usage.Total = cpuUsage

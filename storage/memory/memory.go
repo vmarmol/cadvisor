@@ -43,7 +43,7 @@ func (self *containerStorage) AddStats(stats *info.ContainerStats) error {
 	return nil
 }
 
-func (self *containerStorage) RecentStats(numStats int) ([]*info.ContainerStats, error) {
+func (self *containerStorage) RecentStats(numStats int) ([]info.ContainerStats, error) {
 	self.lock.RLock()
 	defer self.lock.RUnlock()
 	if self.recentStats.Len() < numStats || numStats < 0 {
@@ -59,14 +59,14 @@ func (self *containerStorage) RecentStats(numStats int) ([]*info.ContainerStats,
 	// order. The order of the returned slice is not specified by the
 	// StorageDriver interface, so it is not necessary for other storage
 	// drivers to return the slice in the same order.
-	ret := make([]*info.ContainerStats, numStats)
+	ret := make([]info.ContainerStats, numStats)
 	e := self.recentStats.Front()
 	for i := numStats - 1; i >= 0; i-- {
 		data, ok := e.Value.(*info.ContainerStats)
 		if !ok {
-			return nil, fmt.Errorf("The %vth element is not a ContainerStats", i)
+			return ret, fmt.Errorf("The %vth element is not a ContainerStats", i)
 		}
-		ret[i] = data
+		ret[i] = *data
 		e = e.Next()
 	}
 	return ret, nil
@@ -109,7 +109,7 @@ func (self *InMemoryStorage) AddStats(ref info.ContainerReference, stats *info.C
 	return cstore.AddStats(stats)
 }
 
-func (self *InMemoryStorage) RecentStats(name string, numStats int) ([]*info.ContainerStats, error) {
+func (self *InMemoryStorage) RecentStats(name string, numStats int) ([]info.ContainerStats, error) {
 	var cstore *containerStorage
 	var ok bool
 	err := func() error {

@@ -203,13 +203,11 @@ func (self *bigqueryStorage) containerStatsToValues(
 	// hierarchical major page fault
 	row[colMemoryHierarchicalPgmajfault] = stats.Memory.HierarchicalData.Pgmajfault
 
-	// Optional: Network stats.
-	if stats.Network != nil {
-		row[colRxBytes] = stats.Network.RxBytes
-		row[colRxErrors] = stats.Network.RxErrors
-		row[colTxBytes] = stats.Network.TxBytes
-		row[colTxErrors] = stats.Network.TxErrors
-	}
+	// Network stats.
+	row[colRxBytes] = stats.Network.RxBytes
+	row[colRxErrors] = stats.Network.RxErrors
+	row[colTxBytes] = stats.Network.TxBytes
+	row[colTxErrors] = stats.Network.TxErrors
 
 	// TODO(jnagal): Handle per-cpu stats.
 
@@ -252,11 +250,11 @@ func convertToUint64(v interface{}) (uint64, error) {
 	return 0, fmt.Errorf("unknown type")
 }
 
-func (self *bigqueryStorage) valuesToContainerStats(columns []string, values []interface{}) (*info.ContainerStats, error) {
-	stats := &info.ContainerStats{
-		Cpu:     &info.CpuStats{},
-		Memory:  &info.MemoryStats{},
-		Network: &info.NetworkStats{},
+func (self *bigqueryStorage) valuesToContainerStats(columns []string, values []interface{}) (info.ContainerStats, error) {
+	stats := info.ContainerStats{
+		Cpu:     info.CpuStats{},
+		Memory:  info.MemoryStats{},
+		Network: info.NetworkStats{},
 	}
 	var err error
 	for i, col := range columns {
@@ -269,10 +267,10 @@ func (self *bigqueryStorage) valuesToContainerStats(columns []string, values []i
 		case col == colMachineName:
 			if m, ok := v.(string); ok {
 				if m != self.machineName {
-					return nil, fmt.Errorf("different machine")
+					return stats, fmt.Errorf("different machine")
 				}
 			} else {
-				return nil, fmt.Errorf("machine name field is not a string: %v", v)
+				return stats, fmt.Errorf("machine name field is not a string: %v", v)
 			}
 		// Cumulative Cpu Usage
 		case col == colCpuCumulativeUsage:
@@ -311,14 +309,14 @@ func (self *bigqueryStorage) valuesToContainerStats(columns []string, values []i
 			stats.Network.TxErrors, err = convertToUint64(v)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("column %v has invalid value %v: %v", col, v, err)
+			return stats, fmt.Errorf("column %v has invalid value %v: %v", col, v, err)
 		}
 	}
 	return stats, nil
 }
 
 func (self *bigqueryStorage) AddStats(ref info.ContainerReference, stats *info.ContainerStats) error {
-	if stats == nil || stats.Cpu == nil || stats.Memory == nil {
+	if stats == nil {
 		return nil
 	}
 
@@ -345,7 +343,7 @@ func (self *bigqueryStorage) getRecentRows(containerName string, numRows int) ([
 	return self.client.Query(query)
 }
 
-func (self *bigqueryStorage) RecentStats(containerName string, numStats int) ([]*info.ContainerStats, error) {
+func (self *bigqueryStorage) RecentStats(containerName string, numStats int) ([]info.ContainerStats, error) {
 	if numStats == 0 {
 		return nil, nil
 	}
@@ -353,14 +351,11 @@ func (self *bigqueryStorage) RecentStats(containerName string, numStats int) ([]
 	if err != nil {
 		return nil, err
 	}
-	statsList := make([]*info.ContainerStats, 0, len(rows))
+	statsList := make([]info.ContainerStats, 0, len(rows))
 	for _, row := range rows {
 		stats, err := self.valuesToContainerStats(header, row)
 		if err != nil {
 			return nil, err
-		}
-		if stats == nil {
-			continue
 		}
 		statsList = append(statsList, stats)
 	}

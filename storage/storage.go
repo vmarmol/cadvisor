@@ -24,7 +24,7 @@ type StorageDriver interface {
 	// numStats < 0, then return all stats stored in the storage. The
 	// returned stats should be sorted in time increasing order, i.e. Most
 	// recent stats should be the last.
-	RecentStats(containerName string, numStats int) ([]*info.ContainerStats, error)
+	RecentStats(containerName string, numStats int) ([]info.ContainerStats, error)
 
 	// Close will clear the state of the storage driver. The elements
 	// stored in the underlying storage may or may not be deleted depending

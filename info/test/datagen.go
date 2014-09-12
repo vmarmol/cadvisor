@@ -22,17 +22,15 @@ import (
 	"github.com/google/cadvisor/info"
 )
 
-func GenerateRandomStats(numStats, numCores int, duration time.Duration) []*info.ContainerStats {
-	ret := make([]*info.ContainerStats, numStats)
+func GenerateRandomStats(numStats, numCores int, duration time.Duration) []info.ContainerStats {
+	ret := make([]info.ContainerStats, numStats)
 	perCoreUsages := make([]uint64, numCores)
 	currentTime := time.Now()
 	for i := range perCoreUsages {
 		perCoreUsages[i] = uint64(rand.Int63n(1000))
 	}
 	for i := 0; i < numStats; i++ {
-		stats := new(info.ContainerStats)
-		stats.Cpu = new(info.CpuStats)
-		stats.Memory = new(info.MemoryStats)
+		stats := &ret[i]
 		stats.Timestamp = currentTime
 		currentTime = currentTime.Add(duration)
 
@@ -46,7 +44,6 @@ func GenerateRandomStats(numStats, numCores int, duration time.Duration) []*info
 		stats.Cpu.Usage.User = stats.Cpu.Usage.Total
 		stats.Cpu.Usage.System = 0
 		stats.Memory.Usage = uint64(rand.Int63n(4096))
-		ret[i] = stats
 	}
 	return ret
 }

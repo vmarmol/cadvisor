@@ -86,20 +86,18 @@ func (self *influxdbStorage) containerStatsToValues(
 	columns = append(columns, colMemoryWorkingSet)
 	values = append(values, stats.Memory.WorkingSet)
 
-	// Optional: Network stats.
-	if stats.Network != nil {
-		columns = append(columns, colRxBytes)
-		values = append(values, stats.Network.RxBytes)
+	// Network stats.
+	columns = append(columns, colRxBytes)
+	values = append(values, stats.Network.RxBytes)
 
-		columns = append(columns, colRxErrors)
-		values = append(values, stats.Network.RxErrors)
+	columns = append(columns, colRxErrors)
+	values = append(values, stats.Network.RxErrors)
 
-		columns = append(columns, colTxBytes)
-		values = append(values, stats.Network.TxBytes)
+	columns = append(columns, colTxBytes)
+	values = append(values, stats.Network.TxBytes)
 
-		columns = append(columns, colTxErrors)
-		values = append(values, stats.Network.TxErrors)
-	}
+	columns = append(columns, colTxErrors)
+	values = append(values, stats.Network.TxErrors)
 
 	return columns, values
 }
@@ -137,11 +135,11 @@ func convertToUint64(v interface{}) (uint64, error) {
 	return 0, fmt.Errorf("Unknown type")
 }
 
-func (self *influxdbStorage) valuesToContainerStats(columns []string, values []interface{}) (*info.ContainerStats, error) {
-	stats := &info.ContainerStats{
-		Cpu:     &info.CpuStats{},
-		Memory:  &info.MemoryStats{},
-		Network: &info.NetworkStats{},
+func (self *influxdbStorage) valuesToContainerStats(columns []string, values []interface{}) (info.ContainerStats, error) {
+	stats := info.ContainerStats{
+		Cpu:     info.CpuStats{},
+		Memory:  info.MemoryStats{},
+		Network: info.NetworkStats{},
 	}
 	var err error
 	for i, col := range columns {
@@ -154,10 +152,10 @@ func (self *influxdbStorage) valuesToContainerStats(columns []string, values []i
 		case col == colMachineName:
 			if m, ok := v.(string); ok {
 				if m != self.machineName {
-					return nil, fmt.Errorf("different machine")
+					return stats, fmt.Errorf("different machine")
 				}
 			} else {
-				return nil, fmt.Errorf("machine name field is not a string: %v", v)
+				return stats, fmt.Errorf("machine name field is not a string: %v", v)
 			}
 		// Cumulative Cpu Usage
 		case col == colCpuCumulativeUsage:
@@ -178,7 +176,7 @@ func (self *influxdbStorage) valuesToContainerStats(columns []string, values []i
 			stats.Network.TxErrors, err = convertToUint64(v)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("column %v has invalid value %v: %v", col, v, err)
+			return stats, fmt.Errorf("column %v has invalid value %v: %v", col, v, err)
 		}
 	}
 	return stats, nil
@@ -193,7 +191,7 @@ func (self *influxdbStorage) defaultReadyToFlush() bool {
 }
 
 func (self *influxdbStorage) AddStats(ref info.ContainerReference, stats *info.ContainerStats) error {
-	if stats == nil || stats.Cpu == nil || stats.Memory == nil {
+	if stats == nil {
 		return nil
 	}
 	// AddStats will be invoked simultaneously from multiple threads and only one of them will perform a write.
@@ -219,7 +217,7 @@ func (self *influxdbStorage) AddStats(ref info.ContainerReference, stats *info.C
 	return nil
 }
 
-func (self *influxdbStorage) RecentStats(containerName string, numStats int) ([]*info.ContainerStats, error) {
+func (self *influxdbStorage) RecentStats(containerName string, numStats int) ([]info.ContainerStats, error) {
 	if numStats == 0 {
 		return nil, nil
 	}
@@ -233,7 +231,7 @@ func (self *influxdbStorage) RecentStats(containerName string, numStats int) ([]
 	if err != nil {
 		return nil, err
 	}
-	statsList := make([]*info.ContainerStats, 0, len(series))
+	statsList := make([]info.ContainerStats, 0, len(series))
 	// By default, influxDB returns data in time descending order.
 	// RecentStats() requires stats in time increasing order,
 	// so we need to go through from the last one to the first one.
@@ -245,9 +243,6 @@ func (self *influxdbStorage) RecentStats(containerName string, numStats int) ([]
 			stats, err := self.valuesToContainerStats(s.Columns, values)
 			if err != nil {
 				return nil, err
-			}
-			if stats == nil {
-				continue
 			}
 			statsList = append(statsList, stats)
 		}

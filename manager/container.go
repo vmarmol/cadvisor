@@ -116,12 +116,12 @@ func (self *containerData) nextHousekeeping(lastHousekeeping time.Time) time.Tim
 		} else if len(stats) == 2 {
 			// TODO(vishnuk): Use no processes as a signal.
 			// Raise the interval if usage hasn't changed in the last housekeeping.
-			if stats[0].StatsEq(stats[1]) && (self.housekeepingInterval < *maxHousekeepingInterval) {
+			if stats[0].StatsEq(&stats[1]) && (self.housekeepingInterval < *maxHousekeepingInterval) {
 				self.housekeepingInterval *= 2
 				if self.housekeepingInterval > *maxHousekeepingInterval {
 					self.housekeepingInterval = *maxHousekeepingInterval
 				}
-				glog.V(2).Infof("Raising housekeeping interval for %q to %v", self.info.Name, self.housekeepingInterval)
+				glog.V(1).Infof("Raising housekeeping interval for %q to %v", self.info.Name, self.housekeepingInterval)
 			} else if self.housekeepingInterval != *HousekeepingInterval {
 				// Lower interval back to the baseline.
 				self.housekeepingInterval = *HousekeepingInterval

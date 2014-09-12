@@ -130,7 +130,7 @@ func TestContainerUpdateStats(t *testing.T) {
 	driver := &stest.MockStorageDriver{}
 
 	statsList := itest.GenerateRandomStats(1, 4, 1*time.Second)
-	stats := statsList[0]
+	stats := &statsList[0]
 
 	cd := createContainerDataAndSetHandler(
 		driver,

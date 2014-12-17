@@ -55,6 +55,9 @@ type containerData struct {
 }
 
 func (c *containerData) Start() error {
+	// Ensure we have some initial data for the container.
+	c.housekeepingTick()
+
 	go c.housekeeping()
 	return nil
 }

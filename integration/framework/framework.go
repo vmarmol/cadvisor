@@ -3,6 +3,7 @@ package framework
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os/exec"
 	"strings"
 	"testing"
@@ -26,11 +27,20 @@ type Framework interface {
 	// Returns information about the host being tested.
 	Host() HostInfo
 
+	// Returns the shell-based actions for the test framework.
+	Shell() ShellActions
+
+	// Returns the file-based actions for the test framework.
+	File() FileActions
+
 	// Returns the Docker actions for the test framework.
 	Docker() DockerActions
 
 	// Returns the cAdvisor actions for the test framework.
 	Cadvisor() CadvisorActions
+
+	// Settings of the framework for the current test.
+	Settings() FrameworkSettings
 }
 
 // Instantiates a Framework. Cleanup *must* be called. Class is thread-compatible.
@@ -49,14 +59,29 @@ func New(t *testing.T) Framework {
 		t.Skip("Skipping framework test in short mode")
 	}
 
-	return &realFramework{
+	fm := &realFramework{
 		host: HostInfo{
 			Host: *host,
 			Port: *port,
 		},
-		t:        t,
-		cleanups: make([]func(), 0),
+		t:            t,
+		cleanups:     make([]func(), 0),
+		reportErrors: true,
 	}
+	return fm
+}
+
+type ShellActions interface {
+	// Run the specified command and return its output.
+	RunCommand(cmd string, args ...string) string
+
+	// Runs a script with the specified content and return its output.
+	RunScript(scriptBody string, args ...string) string
+}
+
+type FileActions interface {
+	// Copies the file from this machine onto the host being tested.
+	Copy(src, dest string)
 }
 
 type DockerActions interface {
@@ -80,10 +105,17 @@ type CadvisorActions interface {
 	Client() *client.Client
 }
 
+type FrameworkSettings interface {
+	// Set whether to report errors that occur in framework code. Default is true.
+	// Errors that are not reported are logged as Error.
+	ReportErrors(value bool)
+}
+
 type realFramework struct {
 	host           HostInfo
 	t              *testing.T
 	cadvisorClient *client.Client
+	reportErrors   bool
 
 	// Cleanup functions to call on Cleanup()
 	cleanups []func()
@@ -107,11 +139,23 @@ func (self *realFramework) Host() HostInfo {
 	return self.host
 }
 
+func (self *realFramework) Shell() ShellActions {
+	return self
+}
+
+func (self *realFramework) File() FileActions {
+	return self
+}
+
 func (self *realFramework) Docker() DockerActions {
 	return self
 }
 
 func (self *realFramework) Cadvisor() CadvisorActions {
+	return self
+}
+
+func (self *realFramework) Settings() FrameworkSettings {
 	return self
 }
 
@@ -122,12 +166,49 @@ func (self *realFramework) Cleanup() {
 	}
 }
 
+func (self *realFramework) RunCommand(cmd string, args ...string) string {
+	if self.Host().Host == "localhost" {
+		// Just run locally.
+		out, err := exec.Command(cmd, args...).CombinedOutput()
+		if err != nil {
+			self.fatalErrorf("Failed to run %q with run args %v due to error: %v and output: %q", cmd, args, err, out)
+			return ""
+		}
+		return string(out)
+	}
+
+	// TODO(vmarmol): Implement.
+	// We must SSH to the remote machine and run the command.
+
+	self.fatalErrorf("Non-localhost Run not implemented")
+	return ""
+}
+
+func (self *realFramework) RunScript(scriptBody string, args ...string) string {
+	// Create script file.
+	scriptFile := ioutil.TempFile("", "test-framework-script")
+	_, err := scriptFile.WriteString(scriptBody)
+	if err != nil {
+		self.fatalError("Failed to write script with error: %v", err)
+	}
+
+	// Copy script to destination.
+	self.Copy(scriptFile.Name(), scriptFile.Name())
+
+	// Run script.
+	return self.RunCommand(scriptFile.Name(), args...)
+}
+
+func (self *realFramework) Copy(src, dest string) {
+	// TODO(vmarmol): Implement.
+}
+
 // Gets a client to the cAdvisor being tested.
 func (self *realFramework) Client() *client.Client {
 	if self.cadvisorClient == nil {
 		cadvisorClient, err := client.NewClient(self.Host().FullHost())
 		if err != nil {
-			self.t.Fatalf("Failed to instantiate the cAdvisor client: %v", err)
+			self.fatalErrorf("Failed to instantiate the cAdvisor client: %v", err)
 		}
 		self.cadvisorClient = cadvisorClient
 	}
@@ -161,34 +242,33 @@ type DockerRunArgs struct {
 // RunDockerContainer(DockerRunArgs{Image: "busybox"}, "ping", "www.google.com")
 //   -> docker run busybox ping www.google.com
 func (self *realFramework) Run(args DockerRunArgs, cmd ...string) string {
-	if self.host.Host == "localhost" {
-		// Just run locally.
-		out, err := exec.Command("docker", append(append(append([]string{"run", "-d"}, args.Args...), args.Image), cmd...)...).CombinedOutput()
-		if err != nil {
-			self.t.Fatalf("Failed to run docker container with run args %+v due to error: %v and output: %q", args, err, out)
-			return ""
-		}
-		// The last lime is the container ID.
-		elements := strings.Split(string(out), "\n")
-		if len(elements) < 2 {
-			self.t.Fatalf("Failed to find Docker container ID in output %q", out)
-			return ""
-		}
-		containerId := elements[len(elements)-2]
-		self.cleanups = append(self.cleanups, func() {
-			out, err := exec.Command("docker", "rm", "-f", containerId).CombinedOutput()
-			if err != nil {
-				glog.Errorf("Failed to remove container %q with error: %v and output: %q", containerId, err, out)
-			}
-		})
-		return containerId
+	out := self.Shell().RunCommand("docker", append(append(append([]string{"run", "-d"}, args.Args...), args.Image), cmd...)...)
+	// The last line is the container ID.
+	elements := strings.Split(out, "\n")
+	if len(elements) < 2 {
+		self.fatalErrorf("Failed to find Docker container ID in output %q", out)
+		return ""
 	}
+	containerId := elements[len(elements)-2]
+	self.cleanups = append(self.cleanups, func() {
+		self.Settings().ReportErrors(false)
+		defer self.Settings().ReportErrors(true)
 
-	// TODO(vmarmol): Implement.
-	// We must SSH to the remote machine and run the command.
+		self.Shell().RunCommand("docker", "rm", "-f", containerId)
+	})
+	return containerId
+}
 
-	self.t.Fatalf("Non-localhost Run not implemented")
-	return ""
+func (self *realFramework) ReportErrors(value bool) {
+	self.reportErrors = value
+}
+
+func (self *realFramework) fatalErrorf(fmtString string, args ...interface{}) {
+	if self.reportErrors {
+		self.t.Fatalf(fmtString, args...)
+	} else {
+		glog.Errorf(fmtString, args...)
+	}
 }
 
 // Runs retryFunc until no error is returned. After dur time the last error is returned.

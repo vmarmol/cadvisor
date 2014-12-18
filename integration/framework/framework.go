@@ -3,7 +3,6 @@ package framework
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os/exec"
 	"strings"
 	"testing"
@@ -185,7 +184,7 @@ func (self *realFramework) RunCommand(cmd string, args ...string) string {
 }
 
 func (self *realFramework) RunScript(scriptBody string, args ...string) string {
-	// Create script file.
+	/*// Create script file.
 	scriptFile := ioutil.TempFile("", "test-framework-script")
 	_, err := scriptFile.WriteString(scriptBody)
 	if err != nil {
@@ -196,7 +195,8 @@ func (self *realFramework) RunScript(scriptBody string, args ...string) string {
 	self.Copy(scriptFile.Name(), scriptFile.Name())
 
 	// Run script.
-	return self.RunCommand(scriptFile.Name(), args...)
+	return self.RunCommand(scriptFile.Name(), args...)*/
+	return ""
 }
 
 func (self *realFramework) Copy(src, dest string) {

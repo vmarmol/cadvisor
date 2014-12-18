@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,8 +45,9 @@ func makeSleepContainerWithResources(fm framework.Framework, containerName strin
 		if len(elements) < 4 {
 			fm.T().Errorf("Unexpected cgroup file %q", line)
 		}
-		path := elements[2]
-		subsystems := strings.Split(elements[4], ",")
+		path := elements[1]
+		subsystems := strings.Split(elements[3], ",")
+		fmt.Printf("Vic: %q: path: %q subsys: %q\n", line, path, subsystems)
 
 		// If any of the subsystems is of the specified resource add the path.
 		for _, subsystem := range subsystems {
@@ -63,6 +65,7 @@ func makeSleepContainerWithResources(fm framework.Framework, containerName strin
 			}
 		}
 	}
+	require.NotEmpty(fm.T(), paths)
 
 	cleanup := func() {
 		fm.Settings().ReportErrors(false)

@@ -15,6 +15,9 @@
 package memory
 
 import (
+	"sort"
+	"time"
+
 	"github.com/google/cadvisor/info"
 )
 
@@ -43,7 +46,56 @@ func (self *StatsBuffer) Add(item *info.ContainerStats) {
 	self.buffer[self.index] = *item
 }
 
+// Returns up to maxResult elements in the specified time period (inclusive).
+// Results are from first to last.
+func (self *StatsBuffer) InTimeRange(start, end time.Time, maxResults int) []*info.ContainerStats {
+	// Missing end we assume means now (missing start is 0 already).
+	if end.IsZero() {
+		end = time.Now()
+	}
+
+	// NOTE: Since we store the elments in descending timestamp order "start" will
+	// be a higher index than "end".
+
+	// Start is the index before the elements smaller than it. We do this by
+	// finding the first element smaller than start and taking the index
+	// before that element
+	startIndex := sort.Search(self.size, func(index int) bool {
+		// buffer[index] < start
+		return self.Get(index).Timestamp.Before(start)
+	}) - 1
+	// Check if start is after all the data we have.
+	if startIndex < 0 {
+		return []*info.ContainerStats{}
+	}
+
+	// End is the first index smaller than or equal to it (so, not larger).
+	endIndex := sort.Search(self.size, func(index int) bool {
+		// buffer[index] <= t -> !(buffer[index] > t)
+		return !self.Get(index).Timestamp.After(end)
+	})
+	// Check if end is before all the data we have.
+	if endIndex == self.size {
+		return []*info.ContainerStats{}
+	}
+
+	// Trim to maxResults size.
+	numResults := startIndex - endIndex + 1
+	if numResults > maxResults {
+		startIndex -= numResults - maxResults
+		numResults = maxResults
+	}
+
+	// Return in sorted timestamp order so from the "back" to "front".
+	result := make([]*info.ContainerStats, numResults)
+	for i := 0; i < numResults; i++ {
+		result[i] = self.Get(startIndex - i)
+	}
+	return result
+}
+
 // Returns the first N elements in the buffer. If N > size of buffer, size of buffer elements are returned.
+// Returns the elements in ascending timestamp order.
 func (self *StatsBuffer) FirstN(n int) []*info.ContainerStats {
 	// Cap n at the number of elements we have.
 	if n > self.size {
@@ -63,6 +115,11 @@ func (self *StatsBuffer) FirstN(n int) []*info.ContainerStats {
 		res[i] = &self.buffer[index]
 	}
 	return res
+}
+
+// Gets the element at the specified index. Note that elements are stored in LIFO order.
+func (self *StatsBuffer) Get(index int) *info.ContainerStats {
+	return &self.buffer[(self.index-index)%len(self.buffer)]
 }
 
 func (self *StatsBuffer) Size() int {

@@ -47,41 +47,49 @@ func (self *StatsBuffer) Add(item *info.ContainerStats) {
 }
 
 // Returns up to maxResult elements in the specified time period (inclusive).
-// Results are from first to last.
+// Results are from first to last. maxResults of -1 means no limit.
 func (self *StatsBuffer) InTimeRange(start, end time.Time, maxResults int) []*info.ContainerStats {
-	// Missing end we assume means now (missing start is 0 already).
-	if end.IsZero() {
-		end = time.Now()
-	}
 
 	// NOTE: Since we store the elments in descending timestamp order "start" will
 	// be a higher index than "end".
 
-	// Start is the index before the elements smaller than it. We do this by
-	// finding the first element smaller than start and taking the index
-	// before that element
-	startIndex := sort.Search(self.size, func(index int) bool {
-		// buffer[index] < start
-		return self.Get(index).Timestamp.Before(start)
-	}) - 1
-	// Check if start is after all the data we have.
-	if startIndex < 0 {
-		return []*info.ContainerStats{}
+	var startIndex int
+	if start.IsZero() {
+		// None specified, start at the beginning.
+		startIndex = self.size - 1
+	} else {
+		// Start is the index before the elements smaller than it. We do this by
+		// finding the first element smaller than start and taking the index
+		// before that element
+		startIndex = sort.Search(self.size, func(index int) bool {
+			// buffer[index] < start
+			return self.Get(index).Timestamp.Before(start)
+		}) - 1
+		// Check if start is after all the data we have.
+		if startIndex < 0 {
+			return []*info.ContainerStats{}
+		}
 	}
 
-	// End is the first index smaller than or equal to it (so, not larger).
-	endIndex := sort.Search(self.size, func(index int) bool {
-		// buffer[index] <= t -> !(buffer[index] > t)
-		return !self.Get(index).Timestamp.After(end)
-	})
-	// Check if end is before all the data we have.
-	if endIndex == self.size {
-		return []*info.ContainerStats{}
+	var endIndex int
+	if end.IsZero() {
+		// None specified, end with the latest stats.
+		endIndex = 0
+	} else {
+		// End is the first index smaller than or equal to it (so, not larger).
+		endIndex = sort.Search(self.size, func(index int) bool {
+			// buffer[index] <= t -> !(buffer[index] > t)
+			return !self.Get(index).Timestamp.After(end)
+		})
+		// Check if end is before all the data we have.
+		if endIndex == self.size {
+			return []*info.ContainerStats{}
+		}
 	}
 
 	// Trim to maxResults size.
 	numResults := startIndex - endIndex + 1
-	if numResults > maxResults {
+	if maxResults != -1 && numResults > maxResults {
 		startIndex -= numResults - maxResults
 		numResults = maxResults
 	}
@@ -94,6 +102,7 @@ func (self *StatsBuffer) InTimeRange(start, end time.Time, maxResults int) []*in
 	return result
 }
 
+// TODO(vmarmol): Remove this function as it will no longer be neededt.
 // Returns the first N elements in the buffer. If N > size of buffer, size of buffer elements are returned.
 // Returns the elements in ascending timestamp order.
 func (self *StatsBuffer) FirstN(n int) []*info.ContainerStats {
@@ -119,7 +128,11 @@ func (self *StatsBuffer) FirstN(n int) []*info.ContainerStats {
 
 // Gets the element at the specified index. Note that elements are stored in LIFO order.
 func (self *StatsBuffer) Get(index int) *info.ContainerStats {
-	return &self.buffer[(self.index-index)%len(self.buffer)]
+	calculatedIndex := self.index - index
+	if calculatedIndex < 0 {
+		calculatedIndex += len(self.buffer)
+	}
+	return &self.buffer[calculatedIndex]
 }
 
 func (self *StatsBuffer) Size() int {

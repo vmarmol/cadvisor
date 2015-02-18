@@ -117,8 +117,13 @@ func TestInTimeRange(t *testing.T) {
 	sb := NewStatsBuffer(5)
 	assert := assert.New(t)
 
+	var empty time.Time
+
 	// No elements.
 	assert.Empty(sb.InTimeRange(createTime(0), createTime(5), 10))
+	assert.Empty(sb.InTimeRange(createTime(0), empty, 10))
+	assert.Empty(sb.InTimeRange(empty, createTime(5), 10))
+	assert.Empty(sb.InTimeRange(empty, empty, 10))
 
 	// One element.
 	sb.Add(createStats(1))
@@ -155,8 +160,6 @@ func TestInTimeRange(t *testing.T) {
 	expectElements(t, sb.InTimeRange(createTime(3), createTime(4), 10), []int32{3, 4})
 	expectElements(t, sb.InTimeRange(createTime(3), createTime(5), 10), []int32{3, 4})
 	assert.Empty(sb.InTimeRange(createTime(5), createTime(5), 10))
-
-	var empty time.Time
 
 	// No start time.
 	expectElements(t, sb.InTimeRange(empty, createTime(5), 10), []int32{1, 2, 3, 4})

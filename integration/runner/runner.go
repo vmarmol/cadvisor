@@ -49,17 +49,17 @@ func RunCommand(cmd string, args ...string) error {
 func PushAndRunTests(host, testDir string) error {
 	// Push binary.
 	glog.Infof("Pushing cAdvisor binary to %q...", host)
-	err := RunCommand("gcutil", "ssh", host, "mkdir", "-p", testDir)
+	err := RunCommand("gcloud", "compute", "ssh", common.GetZoneFlag(), host, "--", "mkdir", "-p", testDir)
 	if err != nil {
 		return err
 	}
 	defer func() {
-		err := RunCommand("gcutil", "ssh", host, "rm", "-rf", testDir)
+		err := RunCommand("gcloud", "compute", "ssh", common.GetZoneFlag(), host, "--", "rm", "-rf", testDir)
 		if err != nil {
 			glog.Error(err)
 		}
 	}()
-	err = RunCommand("gcutil", "push", host, cadvisorBinary, testDir)
+	err = RunCommand("gcloud", "compute", "copy-files", common.GetZoneFlag(), cadvisorBinary, fmt.Sprintf("%s:%s", host, testDir))
 	if err != nil {
 		return err
 	}
@@ -70,13 +70,14 @@ func PushAndRunTests(host, testDir string) error {
 	portStr := strconv.Itoa(*port)
 	errChan := make(chan error)
 	go func() {
-		err = RunCommand("gcutil", "ssh", host, "sudo", path.Join(testDir, cadvisorBinary), "--port", portStr, "--logtostderr")
+		//err = RunCommand("gcloud", "compute", "ssh", common.GetZoneFlag(), host, "--", "sudo", path.Join(testDir, cadvisorBinary), "--port", portStr, "--logtostderr")
+		err = RunCommand("gcloud", "compute", "ssh", common.GetZoneFlag(), "--dry-run", host, "--", "sudo", "ssh", "-c", fmt.Sprintf("%s --port %s --logtostderr", path.Join(testDir, cadvisorBinary), portStr))
 		if err != nil {
 			errChan <- err
 		}
 	}()
 	defer func() {
-		err := RunCommand("gcutil", "ssh", host, "sudo", "pkill", cadvisorBinary)
+		err := RunCommand("gcloud", "compute", "ssh", common.GetZoneFlag(), host, "--", "sudo", "pkill", cadvisorBinary)
 		if err != nil {
 			glog.Error(err)
 		}

@@ -17,6 +17,8 @@ package utils
 import (
 	"sort"
 	"time"
+
+	"github.com/google/cadvisor/utils/leak"
 )
 
 type timedStoreDataSlice []timedStoreData
@@ -61,6 +63,9 @@ func (self *TimedStore) Add(timestamp time.Time, item interface{}) {
 	// Remove any elements if over our max size.
 	if self.maxItems >= 0 && (len(self.buffer)+1) > self.maxItems {
 		startIndex := len(self.buffer) + 1 - self.maxItems
+		for i := 0; i < startIndex; i++ {
+			leak.Untrack(self.buffer[i].data)
+		}
 		self.buffer = self.buffer[startIndex:]
 	}
 	// Add the new element first and sort. We can then remove an expired element, if required.
@@ -78,6 +83,9 @@ func (self *TimedStore) Add(timestamp time.Time, item interface{}) {
 		return self.buffer[index].timestamp.After(evictTime)
 	})
 	if index < len(self.buffer) {
+		for i := 0; i < index; i++ {
+			leak.Untrack(self.buffer[i].data)
+		}
 		self.buffer = self.buffer[index:]
 	}
 

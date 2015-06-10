@@ -40,6 +40,7 @@ import (
 	"github.com/google/cadvisor/utils/cpuload"
 	"github.com/google/cadvisor/utils/oomparser"
 	"github.com/google/cadvisor/utils/sysfs"
+	"github.com/google/cadvisor/utils/leak"
 )
 
 var globalHousekeepingInterval = flag.Duration("global_housekeeping_interval", 1*time.Minute, "Interval between global housekeepings")
@@ -131,6 +132,8 @@ func New(memoryCache *memory.InMemoryCache, sysfs sysfs.SysFs) (Manager, error) 
 	if err != nil {
 		return nil, err
 	}
+
+	go leak.StartTracking()
 
 	// If cAdvisor was started with host's rootfs mounted, assume that its running
 	// in its own namespaces.

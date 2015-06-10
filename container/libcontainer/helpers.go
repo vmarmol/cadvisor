@@ -23,6 +23,7 @@ import (
 	"github.com/docker/libcontainer/cgroups"
 	info "github.com/google/cadvisor/info/v1"
 	"github.com/google/cadvisor/utils/sysinfo"
+	"github.com/google/cadvisor/utils/leak"
 )
 
 type CgroupSubsystems struct {
@@ -74,7 +75,7 @@ var supportedSubsystems map[string]struct{} = map[string]struct{}{
 }
 
 // Get cgroup and networking stats of the specified container
-func GetStats(cgroupManager cgroups.Manager, networkInterfaces []string) (*info.ContainerStats, error) {
+func GetStats(name string, cgroupManager cgroups.Manager, networkInterfaces []string) (*info.ContainerStats, error) {
 	cgroupStats, err := cgroupManager.GetStats()
 	if err != nil {
 		return nil, err
@@ -82,7 +83,7 @@ func GetStats(cgroupManager cgroups.Manager, networkInterfaces []string) (*info.
 	libcontainerStats := &libcontainer.Stats{
 		CgroupStats: cgroupStats,
 	}
-	stats := toContainerStats(libcontainerStats)
+	stats := toContainerStats(name, libcontainerStats)
 
 	// TODO(rjnagal): Use networking stats directly from libcontainer.
 	stats.Network.Interfaces = make([]info.InterfaceStats, len(networkInterfaces))
@@ -142,6 +143,7 @@ func DiskStatsCopy(blkio_stats []cgroups.BlkioStatEntry) (stat []info.PerDiskSta
 		return
 	}
 	disk_stat := make(map[DiskKey]*info.PerDiskStats)
+	//leak.Track("disk_stats", disk_stat)
 	for i := range blkio_stats {
 		major := blkio_stats[i].Major
 		minor := blkio_stats[i].Minor
@@ -153,6 +155,7 @@ func DiskStatsCopy(blkio_stats []cgroups.BlkioStatEntry) (stat []info.PerDiskSta
 		if !ok {
 			diskp = DiskStatsCopy0(major, minor)
 			disk_stat[disk_key] = diskp
+			//leak.Track("disk_stats_per_disk_stats", diskp)
 		}
 		op := blkio_stats[i].Op
 		if op == "" {
@@ -239,10 +242,11 @@ func toContainerStats3(libcontainerStats *libcontainer.Stats, ret *info.Containe
 	}
 }
 
-func toContainerStats(libcontainerStats *libcontainer.Stats) *info.ContainerStats {
+func toContainerStats(name string, libcontainerStats *libcontainer.Stats) *info.ContainerStats {
 	s := libcontainerStats.CgroupStats
 	ret := new(info.ContainerStats)
 	ret.Timestamp = time.Now()
+	leak.Track(name, "stats", ret)
 
 	if s != nil {
 		toContainerStats0(s, ret)

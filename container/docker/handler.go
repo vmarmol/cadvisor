@@ -255,7 +255,7 @@ func (self *dockerContainerHandler) GetStats() (*info.ContainerStats, error) {
 			}
 		}
 	}
-	stats, err := containerLibcontainer.GetStats(self.cgroupManager, networkInterfaces)
+	stats, err := containerLibcontainer.GetStats(self.name, self.cgroupManager, networkInterfaces)
 	if err != nil {
 		return stats, err
 	}
